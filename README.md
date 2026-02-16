@@ -113,3 +113,77 @@ bash
 cp ~/firefox-privacy-backup-*/prefs.js ~/.mozilla/firefox/*.default*/prefs.js
 
 This script gives you the same privacy level as LibreWolf while keeping the flexibility of standard Firefox. The extensive comments and organization make it easy to understand what each setting does and modify it if needed.
+
+
+
+
+ifferences from the Heavy Version
+✅ Banking-Friendly Features:
+
+    Cookies are KEPT (network.cookie.lifetimePolicy=0) - Banking sessions persist
+
+    resistFingerprinting is OFF - This feature breaks many banking sites
+
+    HTTPS-only mode is OFF - Some banking sites use mixed content
+
+    WebRTC is ON - Needed for bank video verification
+
+    Geolocation is ON (but prompts) - Some banks use location for fraud detection
+
+✅ Firefox Homepage Works:
+
+    New tab page stays functional
+
+    Snippets remain enabled (helpful Firefox tips)
+
+    Only sponsored content is disabled
+
+✅ Balanced Privacy:
+
+    Tracking protection is ON (but fingerprinting protection is OFF)
+
+    History cleared on shutdown
+
+    Telemetry disabled
+
+    Search suggestions disabled
+
+    Prefetching disabled
+
+    Password saving disabled
+
+🔧 What's Protected vs What's Usable:
+Feature	Setting	Why
+Cookies	Kept	Banking login persistence
+resistFingerprinting	OFF	Prevents banking site breakage
+HTTPS-only	OFF (private mode only)	Some banks use HTTP for parts of site
+WebRTC	ON	Video verification for banks
+Tracking Protection	ON	Blocks trackers safely
+History	Cleared on shutdown	Privacy without breaking functionality
+New Tab Page	Default	Keeps Firefox familiar
+📝 Usage Instructions:
+
+    Save as firefox-lite-harden.sh
+
+    chmod +x firefox-lite-harden.sh
+
+    ./firefox-lite-harden.sh
+
+    Choose to create a new profile (recommended)
+
+    Restart Firefox
+
+🏦 For Banking Sites:
+
+The script creates a perfect balance - your banking sessions will persist, 2FA will work, video verification will function, and you won't get constantly logged out.
+🎯 Recommended Add-ons:
+
+The script suggests add-ons that enhance privacy without breaking banking sites:
+
+    Multi-Account Containers - Isolate your banking in its own container
+
+    uBlock Origin - Use in medium mode (blocks ads but not site functionality)
+
+    ClearURLs - Removes tracking parameters safely
+
+This lite version gives you about 80% of the privacy benefits with 0% of the banking-site headaches!
