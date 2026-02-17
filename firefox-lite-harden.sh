@@ -4,7 +4,7 @@
 # The MIT License (MIT)
 # Wael Isa
 # Build Date: 02/18/2026
-# Version: 1.0.0
+# Version: 3.0.0
 # https://github.com/waelisa/firefox-lite-harden
 #############################################################################################################################
 # Firefox Lite Privacy Hardening Script
@@ -168,7 +168,7 @@ init_user_js() {
 // GitHub: https://github.com/waelisa/firefox-lite-harden
 // Applied on: $(date)
 // This is a BALANCED approach - keeps banking sites working and Firefox homepage functional
-// Version: 1.0.0
+// Version: 3.0.0
 
 EOF
 
@@ -349,7 +349,7 @@ main() {
     echo -e "${GREEN}   Firefox LITE Privacy Hardening   ${NC}"
     echo -e "${GREEN}   (Banking-Friendly Edition)       ${NC}"
     echo -e "${GREEN}   Author: Wael Isa                 ${NC}"
-    echo -e "${GREEN}   Version: 1.0.0                   ${NC}"
+    echo -e "${GREEN}   Version: 3.0.0                   ${NC}"
     echo -e "${GREEN}========================================${NC}"
 
     # Check if Firefox is installed
