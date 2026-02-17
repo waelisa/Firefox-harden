@@ -46,7 +46,6 @@ Standard
 
 🏁 Letterboxed (Gray Borders)
 
-Export to Sheets
 
 ## **🚀 Quick Start (One-Liners)**
 
@@ -98,6 +97,6 @@ The **Lite** script leaves WebRTC on for Zoom/Teams. The **Extreme** script disa
 
 If these scripts help you take control of your digital footprint, consider supporting the work:
 
-*   **GitHub:** [waelisa/Firefox-harden](https://github.com/waelisa/Firefox-harden))
+*   **GitHub:** [waelisa/Firefox-harden](https://github.com/waelisa/Firefox-harden)
 *   **PayPal:** [Donate link – PayPal](https://www.paypal.me/WaelIsa)
 *   **Blog:** [Wael.name](https://www.wael.name)
