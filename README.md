@@ -1,192 +1,103 @@
-# Firefox-harden
-How to Use This Script
+# **Firefox Privacy Suite (Lite & Extreme)**
 
-    Download the script:
+A comprehensive privacy toolkit for Firefox. This repository provides two specialized scripts to harden your browser: **Lite** (for daily usability and banking) and **Extreme** (for maximum anonymity and data sovereignty).
 
-bash
+## **📊 Choose Your Protection Level**
 
-wget https://github.com/waelisa/Firefox-harden/raw/refs/heads/main/firefox-harden.sh
+Feature
 
-    Make it executable:
+**Firefox-Lite-Harden**
 
-bash
+**Firefox-Harden (Extreme)**
 
-chmod +x firefox-harden.sh
+**Philosophy**
 
-    Run the script:
+Privacy without breakage.
 
-bash
+Maximum security "Fortress."
 
-./firefox-harden.sh
+**Banking & PayPal**
 
-What This Script Does
-🛡️ Comprehensive Privacy Hardening
+✅ Works Out-of-box
 
-The script modifies over 100 Firefox preferences across multiple categories:
-Category	Key Changes
-Privacy & Tracking	Enables all tracking protection features
-History & Data	Clears everything on shutdown, disables session restore
-Address Bar	Disables all suggestions (history, bookmarks, etc.)
-Security	Enables safe browsing but disables remote lookups
-HTTPS	Forces HTTPS-only mode everywhere
-Passwords	Disables password saving and autofill completely
-Home/New Tab	Removes all sponsored content and suggestions
-Telemetry	Completely disables all Mozilla data collection
-Fingerprinting	Enables resistFingerprinting and letterboxing
-WebRTC	Prevents IP leaks by disabling WebRTC
-Geolocation	Disables all location services
-Mozilla Services	Disables Pocket, sponsored tiles, etc.
-Network	Disables prefetching, preloading, speculative connections
-Extensions	Restricts extension installation sources
-📁 Backup Creation
+⚠️ May trigger bot detection
 
-    Automatically creates timestamped backups of your existing prefs.js and user.js
+**Video Calls (WebRTC)**
 
-    Backup location: ~/firefox-privacy-backup-YYYYMMDD-HHMMSS/
+✅ Supported
 
-🔧 Profile Management Options
+❌ Disabled (VPN Leak protection)
 
-    Option to create a new dedicated "privacy-hardened" profile
+**DRM (Netflix/Spotify)**
 
-    Keeps your existing Firefox configuration separate
+✅ Enabled
 
-    Launch with: firefox -P privacy-hardened
+❌ Disabled by default
 
-📋 Additional Features
+**Anti-Fingerprinting**
 
-    Add-on recommendations with direct links to Mozilla Add-ons
+🛡️ Basic Protection
 
-    Important notes about potential breakage and how to handle it
+🔒 Strict (ResistFingerprinting)
 
-    Verification instructions to check settings in about:config
+**Visuals**
 
-    Colored output for better readability
+Standard
 
-Important Notes
+🏁 Letterboxed (Gray Borders)
 
-⚠️ Potential Breakage: The privacy.resistFingerprinting setting (enabled by this script) is the most aggressive privacy feature. It may cause:
+Export to Sheets
 
-    Websites to display incorrectly
+## **🚀 Quick Start (One-Liners)**
 
-    Some functionality to break
+### **Option 1: The "Daily Driver" (Lite)**
 
-    Date/time to appear in UTC
+_Best for users who want to kill telemetry and ads but keep banking and video calls working._
 
-    Fonts to be limited
+Bash
 
-🔧 If websites break, you can:
+wget -qO firefox-lite-harden.sh https://github.com/waelisa/Firefox-harden/raw/refs/heads/main/firefox-lite-harden.sh && chmod +x firefox-lite-harden.sh && ./firefox-lite-harden.sh
 
-    Temporarily disable resistFingerprinting for that site
+### **Option 2: The "Fortress" (Extreme)**
 
-    Create site-specific exceptions in about:config
+_Best for journalists, activists, or privacy enthusiasts who want to look identical to other hardened users._
 
-    Use Firefox Multi-Account Containers to isolate problematic sites
+Bash
 
-🎬 Streaming Services: Netflix, Hulu, etc. may not work due to:
+wget -qO firefox-harden.sh https://github.com/waelisa/Firefox-harden/raw/refs/heads/main/firefox-harden.sh && chmod +x firefox-harden.sh && ./firefox-harden.sh
 
-    DRM being effectively disabled
+## **✨ Key Features (Both Scripts)**
 
-    Cookies being cleared on exit
+*   **Zero Telemetry:** Kills all Mozilla data collection, health reports, and "studies."
+*   **De-Bloat:** Removes Pocket, Sponsored Shortcuts, and the Firefox View button.
+*   **Auto-Detection:** Automatically finds profiles for **Native**, **Flatpak**, and **Snap** installations.
+*   **Profile Safety:** Offers to create a **new profile** so your original data remains untouched.
+*   **Process Guard:** Checks if Firefox is running to prevent configuration corruption.
 
-    You may need to enable DRM and keep cookies for specific streaming domains
+## **🛠 Manual Configuration**
 
-Verification
+Both scripts utilize a user.js file placed in your Firefox profile directory. This file overrides about:config settings every time the browser starts, ensuring your privacy settings are never "undone" by browser updates.
 
-After running the script and restarting Firefox:
+### **To Undo Changes:**
 
-    Type about:config in the address bar
+1.  Navigate to your profile folder (e.g., \~/.mozilla/firefox/[profile-name]).
+2.  Delete the user.js file.
+3.  Restart Firefox.
 
-    Search for any of the preferences set by the script
+## **📈 Technical Comparisons**
 
-    Verify they match the values in the script
+### **Resist Fingerprinting (RFP)**
 
-Undo Changes
+The **Extreme** script enables privacy.resistFingerprinting. This forces Firefox to use a generic screen resolution and UTC timezone. You will see "gray bars" around websites—this is a feature, not a bug! It prevents trackers from identifying you based on your monitor size.
 
-To revert to your previous settings:
+### **WebRTC IP Leaks**
 
-    Delete the user.js file from your profile directory
+The **Lite** script leaves WebRTC on for Zoom/Teams. The **Extreme** script disables it entirely to prevent your real IP address from leaking through your VPN.
 
-    Or restore from the backup created by the script:
+## **☕ Support the Project**
 
-bash
+If these scripts help you take control of your digital footprint, consider supporting the work:
 
-cp ~/firefox-privacy-backup-*/prefs.js ~/.mozilla/firefox/*.default*/prefs.js
-
-This script gives you the same privacy level as LibreWolf while keeping the flexibility of standard Firefox. The extensive comments and organization make it easy to understand what each setting does and modify it if needed.
-
-
-
-
-ifferences from the Heavy Version
-✅ Banking-Friendly Features:
-
-    Cookies are KEPT (network.cookie.lifetimePolicy=0) - Banking sessions persist
-
-    resistFingerprinting is OFF - This feature breaks many banking sites
-
-    HTTPS-only mode is OFF - Some banking sites use mixed content
-
-    WebRTC is ON - Needed for bank video verification
-
-    Geolocation is ON (but prompts) - Some banks use location for fraud detection
-
-✅ Firefox Homepage Works:
-
-    New tab page stays functional
-
-    Snippets remain enabled (helpful Firefox tips)
-
-    Only sponsored content is disabled
-
-✅ Balanced Privacy:
-
-    Tracking protection is ON (but fingerprinting protection is OFF)
-
-    History cleared on shutdown
-
-    Telemetry disabled
-
-    Search suggestions disabled
-
-    Prefetching disabled
-
-    Password saving disabled
-
-🔧 What's Protected vs What's Usable:
-Feature	Setting	Why
-Cookies	Kept	Banking login persistence
-resistFingerprinting	OFF	Prevents banking site breakage
-HTTPS-only	OFF (private mode only)	Some banks use HTTP for parts of site
-WebRTC	ON	Video verification for banks
-Tracking Protection	ON	Blocks trackers safely
-History	Cleared on shutdown	Privacy without breaking functionality
-New Tab Page	Default	Keeps Firefox familiar
-📝 Usage Instructions:
-
-    Save as firefox-lite-harden.sh
-
-    chmod +x firefox-lite-harden.sh
-
-    ./firefox-lite-harden.sh
-
-    Choose to create a new profile (recommended)
-
-    Restart Firefox
-
-🏦 For Banking Sites:
-
-The script creates a perfect balance - your banking sessions will persist, 2FA will work, video verification will function, and you won't get constantly logged out.
-🎯 Recommended Add-ons:
-
-The script suggests add-ons that enhance privacy without breaking banking sites:
-
-    Multi-Account Containers - Isolate your banking in its own container
-
-    uBlock Origin - Use in medium mode (blocks ads but not site functionality)
-
-    ClearURLs - Removes tracking parameters safely
-
-This lite version gives you about 80% of the privacy benefits with 0% of the banking-site headaches!
-
-[Donate link – PayPal](https://www.paypal.me/WaelIsa)
-
+*   **GitHub:** [waelisa/Firefox-harden](https://github.com/waelisa/Firefox-harden))
+*   **PayPal:** [Donate link – PayPal](https://www.paypal.me/WaelIsa)
+*   **Blog:** [Wael.name](https://www.wael.name)
