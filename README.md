@@ -187,3 +187,6 @@ The script suggests add-ons that enhance privacy without breaking banking sites:
     ClearURLs - Removes tracking parameters safely
 
 This lite version gives you about 80% of the privacy benefits with 0% of the banking-site headaches!
+
+[Donate link – PayPal](https://www.paypal.me/WaelIsa)
+
