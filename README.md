@@ -53,17 +53,29 @@ Standard
 
 _Best for users who want to kill telemetry and ads but keep banking and video calls working._
 
-Bash
+```bash
 
 wget -qO firefox-lite-harden.sh https://github.com/waelisa/Firefox-harden/raw/refs/heads/main/firefox-lite-harden.sh && chmod +x firefox-lite-harden.sh && ./firefox-lite-harden.sh
+```
 
 ### **Option 2: The "Fortress" (Extreme)**
 
 _Best for journalists, activists, or privacy enthusiasts who want to look identical to other hardened users._
 
-Bash
-
+```bash
 wget -qO firefox-harden.sh https://github.com/waelisa/Firefox-harden/raw/refs/heads/main/firefox-harden.sh && chmod +x firefox-harden.sh && ./firefox-harden.sh
+```
+## **🛠 I forget 1 more
+
+Here how to do it, open this page in firefox
+```bash
+about:config
+```
+and  search for
+```bash
+incoming.telemetry.mozilla.org
+```
+change it to false.
 
 ## **✨ Key Features (Both Scripts)**
 
