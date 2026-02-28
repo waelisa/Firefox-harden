@@ -65,7 +65,7 @@ _Best for journalists, activists, or privacy enthusiasts who want to look identi
 ```bash
 wget -qO firefox-harden.sh https://github.com/waelisa/Firefox-harden/raw/refs/heads/main/firefox-harden.sh && chmod +x firefox-harden.sh && ./firefox-harden.sh
 ```
-## **🛠 I forget 1 more
+## 🛠 I forget 1 more
 
 Here how to do it, open this page in firefox
 ```bash
