@@ -1,114 +1,178 @@
-# **Firefox Privacy Suite (Lite & Extreme)**
+🦊 Firefox Privacy Hardening Scripts  
 
-A comprehensive privacy toolkit for Firefox. This repository provides two specialized scripts to harden your browser: **Lite** (for daily usability and banking) and **Extreme** (for maximum anonymity and data sovereignty).
+📖 Overview
 
-## **📊 Choose Your Protection Level**
+This repository contains two Bash scripts that automatically configure Firefox preferences via user.js to enhance privacy, security, and reduce telemetry.
 
-Feature
+firefox-harden.sh: Aggressive hardening for maximum privacy (may break some sites).
 
-**Firefox-Lite-Harden**
+firefox-lite-harden.sh: Balanced hardening optimized for banking compatibility and daily use.
 
-**Firefox-Harden (Extreme)**
+Both scripts include automatic profile detection, backup systems, validation checks, and restore options.
 
-**Philosophy**
+🚀 Quick Start
 
-Privacy without breakage.
+# Clone the repository
+```bash
+git clone https://github.com/waelisa/Firefox-harden.git
 
-Maximum security "Fortress."
+cd Firefox-harden
+```
+# Make executable
+```bash
+chmod +x firefox-harden.sh
 
-**Banking & PayPal**
+chmod +x firefox-lite-harden.sh
+```
+# Run one of them
+```bash
+./firefox-lite-harden.sh # Recommended for daily use
+```
+# OR
+```bash
+./firefox-harden.sh # For maximum privacy
+```
+🏆 Which One Should You Choose?
 
-✅ Works Out-of-box
+Choose firefox-lite-harden.sh if:
 
-⚠️ May trigger bot detection
+✅ Banking compatibility is your top priority
 
-**Video Calls (WebRTC)**
+✅ You need video calls to work (WebRTC)
 
-✅ Supported
+✅ You prefer Firefox homepage functionality
 
-❌ Disabled (VPN Leak protection)
+✅ You want a balanced approach (privacy + usability)
 
-**DRM (Netflix/Spotify)**
+Choose firefox-harden.sh if:
 
-✅ Enabled
+✅ You want maximum privacy above all else
 
-❌ Disabled by default
+✅ You don't mind some sites breaking occasionally
 
-**Anti-Fingerprinting**
+✅ You're comfortable adjusting settings manually for specific sites
 
-🛡️ Basic Protection
+✅ You use Firefox primarily for browsing, not banking/video calls
 
-🔒 Strict (ResistFingerprinting)
+🛠️ Features (Both Scripts)
 
-**Visuals**
+✅ Automatic Profile Detection: Works with Desktop, Flatpak, and Snap Firefox profiles.
 
-Standard
+✅ Backup System: Creates timestamped backups before applying changes.
 
-🏁 Letterboxed (Gray Borders)
+✅ Validation System: Confirms all settings were applied correctly at the end.
 
+✅ Restore Option: Allows reverting to backup after script completion.
 
-## **🚀 Quick Start (One-Liners)**
+✅ OS Compatibility: Auto-detects macOS vs Linux for sed -i command.
 
-### **Option 1: The "Daily Driver" (Lite)**
+✅ Profile Creation Timeout: Prevents infinite loops when creating new profiles.
 
-_Best for users who want to kill telemetry and ads but keep banking and video calls working._
+✅ Banking Friendly: Optimized settings to keep sessions persistent.
+
+📝 Configuration Options
+
+Dry Run Mode (Lite Version Only)
+
+Preview changes before applying:
+```bash
+./firefox-lite-harden.sh --dry-run
+```
+Create New Profile
+
+The script will ask if you want a new profile:
+
+Yes: Creates privacy-hardened or privacy-lite profile.
+
+No: Uses existing default profile.
+
+🧪 Test Checklist After Running
+
+After running either script, verify these work:
+
+Open a banking website (should load normally)
+
+Check Firefox homepage (snippets should appear in Lite version)
+
+Try video call (WebRTC works in Lite version)
+
+Verify privacy settings in about:config
+
+Check backup folder exists at $HOME/firefox-\*-backup-\*
+
+📂 File Structure
 
 ```bash
 
-wget -qO firefox-lite-harden.sh https://github.com/waelisa/Firefox-harden/raw/refs/heads/main/firefox-lite-harden.sh && chmod +x firefox-lite-harden.sh && ./firefox-lite-harden.sh
+Firefox-harden/
+
+├── firefox-harden.sh # Full aggressive hardening script
+
+├── firefox-lite-harden.sh # Balanced banking-friendly script
+
+└── README.md # This file
 ```
 
-### **Option 2: The "Fortress" (Extreme)**
+🔧 Troubleshooting
 
-_Best for journalists, activists, or privacy enthusiasts who want to look identical to other hardened users._
+Script hangs on "Waiting for profile creation..."
 
-```bash
-wget -qO firefox-harden.sh https://github.com/waelisa/Firefox-harden/raw/refs/heads/main/firefox-harden.sh && chmod +x firefox-harden.sh && ./firefox-harden.sh
-```
-## 🛠 I forget 1 more
+Cause: Firefox is slow to create the new profile.
 
-Here how to do it, open this page in firefox
-```bash
-about:config
-```
-and  search for
-```bash
-incoming.telemetry.mozilla.org
-```
-change it to false.
+Fix: Wait up to 60 seconds (timeout limit). If it fails, restart script.
 
-## **✨ Key Features (Both Scripts)**
+Banking site breaks after running firefox-harden.sh
 
-*   **Zero Telemetry:** Kills all Mozilla data collection, health reports, and "studies."
-*   **De-Bloat:** Removes Pocket, Sponsored Shortcuts, and the Firefox View button.
-*   **Auto-Detection:** Automatically finds profiles for **Native**, **Flatpak**, and **Snap** installations.
-*   **Profile Safety:** Offers to create a **new profile** so your original data remains untouched.
-*   **Process Guard:** Checks if Firefox is running to prevent configuration corruption.
+Cause: Aggressive fingerprinting protection (resistFingerprinting = true).
 
-## **🛠 Manual Configuration**
+Fix: Open about:config, search for privacy.resistFingerprinting, set to false.
 
-Both scripts utilize a user.js file placed in your Firefox profile directory. This file overrides about:config settings every time the browser starts, ensuring your privacy settings are never "undone" by browser updates.
+Settings not applying
 
-### **To Undo Changes:**
+Cause: Firefox needs a full restart.
 
-1.  Navigate to your profile folder (e.g., \~/.mozilla/firefox/[profile-name]).
-2.  Delete the user.js file.
-3.  Restart Firefox.
+Fix: Close all Firefox windows completely, then reopen.
 
-## **📈 Technical Comparisons**
+📜 Changelog
 
-### **Resist Fingerprinting (RFP)**
+v2.1.0 (Latest)
 
-The **Extreme** script enables privacy.resistFingerprinting. This forces Firefox to use a generic screen resolution and UTC timezone. You will see "gray bars" around websites—this is a feature, not a bug! It prevents trackers from identifying you based on your monitor size.
+✅ Fixed infinite loop on profile creation
 
-### **WebRTC IP Leaks**
+✅ Added validation system to confirm settings applied
 
-The **Lite** script leaves WebRTC on for Zoom/Teams. The **Extreme** script disables it entirely to prevent your real IP address from leaking through your VPN.
+✅ Improved banking compatibility (cookies kept by default)
 
-## **☕ Support the Project**
+✅ OS detection for sed -i command (macOS/Linux)
 
-If these scripts help you take control of your digital footprint, consider supporting the work:
+v2.0.0
 
-*   **GitHub:** [waelisa/Firefox-harden](https://github.com/waelisa/Firefox-harden)
-*   **PayPal:** [Donate link – PayPal](https://www.paypal.me/WaelIsa)
-*   **Blog:** [Wael.name](https://www.wael.name)
+✅ Complete rewrite with enhanced privacy and profile detection
+
+✅ Fixed infinite loop on profile creation, added timeout limit
+
+v1.0.0
+
+✅ Initial release
+
+👤 Author
+
+Wael Isa
+
+🌐 Website: https://www.wael.name
+
+📦 GitHub: https://github.com/waelisa
+
+📧 Email: (See profile for contact)
+
+📄 License
+
+MIT License - See LICENSE file for details.
+
+🔗 Links
+
+Repository: https://github.com/waelisa/Firefox-harden
+
+Issue Tracker: GitHub Issues
+
+Firefox Docs: about:config Guide
