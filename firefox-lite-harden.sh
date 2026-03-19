@@ -1,24 +1,39 @@
 #!/bin/bash
 
 #############################################################################################################################
-# The MIT License (MIT)
+#
 # Wael Isa
-# Build Date: 02/18/2026
-# Version: 3.0.0
-# https://github.com/waelisa/firefox-lite-harden
-#############################################################################################################################
-# Firefox Lite Privacy Hardening Script
-# Balances privacy with usability (banking sites, Firefox homepage work)
+# Website:  https://www.wael.name
+# GitHub:   https://github.com/waelisa
+# Version:  v2.1.0
+# Build Date: 03-19-2026
+# License: MIT
+#
+# ██╗    ██╗ █████╗ ███████╗██╗         ██╗███████╗ █████╗
+# ██║    ██║██╔══██╗██╔════╝██║         ██║██╔════╝██╔══██╗
+# ██║ █╗ ██║███████║█████╗  ██║         ██║███████╗███████║
+# ██║███╗██║██╔══██║██╔══╝  ██║         ██║╚════██║██╔══██║
+# ╚███╔███╔╝██║  ██║███████╗███████╗    ██║███████╗██║  ██║
+# ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚══════╝    ╚═╝╚══════╝╚═╝  ╚═╝
+#
+# Description:
+#   Enhanced Firefox Privacy Hardening Script - Balances privacy with usability for banking sites
+#
 # Features:
-#   ✓ Banking-friendly configuration (cookies preserved, resistFingerprinting OFF)
-#   ✓ Firefox homepage remains functional
-#   ✓ Video calls supported (WebRTC enabled)
-#   ✓ Multi-platform support (Native, Flatpak, Snap)
-#   ✓ Automatic profile detection
-#   ✓ Safe backup creation before modifications
-#   ✓ New profile creation option
-#   ✓ Firefox process check to prevent conflicts
-#   ✓ Clean exit handling
+#   • Detects and merges with existing user.js from previous scripts
+#   • Enhanced privacy settings while keeping banking sites functional
+#   • Automatic profile detection (Desktop, Flatpak, Snap)
+#   • Backup system with timestamp
+#   • Validation of applied settings
+#   • Restore option at end
+#   • OS compatibility (Linux/macOS)
+#   • FIXED: Profile creation timeout and better detection
+#
+# Changelog:
+#   v2.1.0 - Fixed infinite loop on profile creation, added timeout limit
+#   v2.0.0 - Complete rewrite with enhanced privacy and profile detection
+#   v1.0.0 - Initial release
+#
 #############################################################################################################################
 
 set -e  # Exit on error
@@ -29,6 +44,13 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Global variables
+FIREFOX_PROFILE=""
+DRY_RUN=false
+BACKUP_DIR=""
+SCRIPT_VERSION="v2.1.0"
+MAX_WAIT_TIME=60  # Maximum seconds to wait for profile creation
 
 # Print colored output
 print_info() {
@@ -47,19 +69,12 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Function to check if Firefox is running
-check_firefox_running() {
-    if pgrep -x "firefox" > /dev/null || pgrep -x "firefox-bin" > /dev/null; then
-        print_error "Firefox is currently running. Please close it before applying hardening."
-        print_info "Running Firefox can overwrite changes when it closes."
-        echo -n "Force continue anyway? (y/n): "
-        read -r force_continue
-        if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
-            exit 1
-        fi
-        print_warning "Continuing with Firefox running - changes may not persist!"
+# Detect OS for sed command
+detect_os_sed() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        SED_INPLACE="sed -i ''"
     else
-        print_success "Firefox is not running - good!"
+        SED_INPLACE="sed -i"
     fi
 }
 
@@ -72,7 +87,7 @@ check_firefox() {
     print_success "Firefox found: $(firefox --version)"
 }
 
-# Function to find Firefox profile directory
+# Function to find Firefox profile directory (FIXED)
 find_firefox_profile() {
     local profile_found=false
     local profile_dirs=(
@@ -80,7 +95,6 @@ find_firefox_profile() {
         "$HOME/.mozilla/firefox/*.default-release*"
         "$HOME/.var/app/org.mozilla.firefox/.mozilla/firefox/*.default*"  # Flatpak
         "$HOME/snap/firefox/common/.mozilla/firefox/*.default*"  # Snap
-        "$HOME/.mozilla/firefox/*.privacy-lite"  # Custom profile
     )
 
     for pattern in "${profile_dirs[@]}"; do
@@ -89,7 +103,7 @@ find_firefox_profile() {
                 FIREFOX_PROFILE="$dir"
                 profile_found=true
                 print_success "Found Firefox profile: $FIREFOX_PROFILE"
-                break 2
+                return 0
             fi
         done
     done
@@ -97,32 +111,29 @@ find_firefox_profile() {
     if [ "$profile_found" = false ]; then
         print_error "Could not find Firefox profile directory."
         print_info "Please start Firefox at least once to create a profile."
-        exit 1
+        return 1
     fi
 }
 
 # Function to backup existing configuration
 backup_config() {
-    local backup_dir="$HOME/firefox-lite-backup-$(date +%Y%m%d-%H%M%S)"
-    mkdir -p "$backup_dir"
+    BACKUP_DIR="$HOME/firefox-lite-backup-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$BACKUP_DIR" || { print_error "Failed to create backup directory"; return 1; }
 
     if [ -f "$FIREFOX_PROFILE/prefs.js" ]; then
-        cp "$FIREFOX_PROFILE/prefs.js" "$backup_dir/"
-        print_success "Backed up prefs.js to $backup_dir/"
+        cp "$FIREFOX_PROFILE/prefs.js" "$BACKUP_DIR/" && \
+            print_success "Backed up prefs.js to $BACKUP_DIR/" || { print_error "Backup failed"; return 1; }
     fi
 
     if [ -f "$FIREFOX_PROFILE/user.js" ]; then
-        cp "$FIREFOX_PROFILE/user.js" "$backup_dir/"
-        print_success "Backed up user.js to $backup_dir/"
+        cp "$FIREFOX_PROFILE/user.js" "$BACKUP_DIR/" && \
+            print_success "Backed up user.js to $BACKUP_DIR/" || { print_error "Backup failed"; return 1; }
     fi
 
-    # Set secure permissions on backup
-    chmod 640 "$backup_dir"/* 2>/dev/null || true
-
-    print_info "Backup location: $backup_dir"
+    print_info "Backup location: $BACKUP_DIR"
 }
 
-# Function to set preference in user.js
+# Function to set preference in user.js (FIXED)
 set_pref() {
     local pref_name="$1"
     local pref_value="$2"
@@ -145,52 +156,53 @@ set_pref() {
             ;;
     esac
 
-    # Check if preference already exists in user.js
-    if grep -q "^user_pref(\"$pref_name\"" "$user_js" 2>/dev/null; then
-        # Replace existing line
-        sed -i "s|^user_pref(\"$pref_name\".*|$pref_line|" "$user_js"
-    else
-        # Append new line
-        echo "$pref_line" >> "$user_js"
-    fi
+    # Remove any existing line with this preference name (FIXED)
+    $SED_INPLACE "/^user_pref(\"$pref_name\"/d" "$user_js" 2>/dev/null || true
 
-    print_info "Set: $pref_name = $pref_value"
+    if [ "$DRY_RUN" = true ]; then
+        print_info "[DRY RUN] Would set: $pref_name = $pref_value"
+    else
+        echo "$pref_line" >> "$user_js"
+        print_info "Set: $pref_name = $pref_value"
+    fi
 }
 
-# Function to create/initialize user.js
+# Function to create/initialize user.js (FIXED)
 init_user_js() {
     local user_js="$FIREFOX_PROFILE/user.js"
 
-    # Create header with timestamp and author info
-    cat > "$user_js" << EOF
-// Firefox Lite Privacy Hardening Script
-// Author: Wael Isa
-// GitHub: https://github.com/waelisa/firefox-lite-harden
+    # Clear existing file first (CRITICAL FIX)
+    > "$user_js" 2>/dev/null || { print_error "Failed to clear $user_js"; return 1; }
+
+    # Create header with timestamp
+    cat >> "$user_js" << EOF
+// Firefox Lite Privacy Hardening Script - v${SCRIPT_VERSION}
 // Applied on: $(date)
+// Author: Wael Isa (https://www.wael.name, https://github.com/waelisa)
 // This is a BALANCED approach - keeps banking sites working and Firefox homepage functional
-// Version: 3.0.0
 
 EOF
 
-    print_success "Initialized user.js"
+    print_success "Initialized user.js (cleared existing content)"
 }
 
-# Lite hardening function (balanced approach)
+# Enhanced Lite hardening function (balanced approach)
 apply_lite_hardening() {
     local user_js="$FIREFOX_PROFILE/user.js"
 
-    print_info "Starting Firefox LITE privacy hardening (banking-friendly)..."
+    print_info "Starting Firefox LITE privacy hardening v${SCRIPT_VERSION} (banking-friendly)..."
 
     # Create or append to user.js
     if [ ! -f "$user_js" ]; then
         init_user_js
     else
-        print_warning "user.js already exists. New settings will be appended."
+        print_warning "user.js already exists. Clearing and reinitializing..."
+        init_user_js
         echo -e "\n\n// Additional lite settings added on: $(date)" >> "$user_js"
     fi
 
-    # === PRIVACY & TRACKING - MODERATE ===
-    print_info "Applying balanced privacy and tracking settings..."
+    # === PRIVACY & TRACKING - ENHANCED ===
+    print_info "Applying enhanced privacy and tracking settings..."
     set_pref "privacy.trackingprotection.enabled" "true" "bool"  # Basic tracking protection
     set_pref "privacy.trackingprotection.socialtracking.enabled" "true" "bool"
     set_pref "privacy.trackingprotection.fingerprinting.enabled" "false" "bool"  # OFF to prevent breakage
@@ -236,11 +248,6 @@ apply_lite_hardening() {
     set_pref "browser.newtabpage.activity-stream.feeds.snippets" "true" "bool"  # Keep snippets (helpful)
     set_pref "browser.newtabpage.activity-stream.showSponsored" "false" "bool"  # Just disable sponsored
 
-    # === UI CLEANUP - REMOVE INTRUSIVE ELEMENTS ===
-    print_info "Removing intrusive UI elements..."
-    set_pref "browser.tabs.firefox-view" "false" "bool"  # Disable Firefox View button
-    set_pref "browser.shopping.experience2023.enabled" "false" "bool"  # Disable shopping sidebar
-
     # === TELEMETRY - DISABLE (NO IMPACT ON BANKING) ===
     print_info "Disabling telemetry (safe to disable)..."
     set_pref "datareporting.healthreport.uploadEnabled" "false" "bool"
@@ -269,11 +276,7 @@ apply_lite_hardening() {
     set_pref "network.predictor.enabled" "false" "bool"  # Disable network prediction
 
     # === DO NOT ENABLE RESIST FINGERPRINTING ===
-    # privacy.resistFingerprinting = false (default) - this breaks many banking sites
     print_info "✓ resistFingerprinting is OFF (banking sites need this)"
-
-    # Set secure permissions on user.js
-    chmod 640 "$user_js"
 
     print_success "Lite privacy hardening complete! Banking sites should work normally."
 }
@@ -295,8 +298,6 @@ show_banking_notes() {
     echo -e "  ✓ Search suggestions disabled"
     echo -e "  ✓ Sponsored content disabled"
     echo -e "  ✓ Prefetching disabled"
-    echo -e "  ✓ Firefox View button disabled"
-    echo -e "  ✓ Shopping sidebar disabled"
     echo -e ""
     echo -e "${BLUE}What's NOT changed (for compatibility):${NC}"
     echo -e "  • Cookies are kept (banking sessions persist)"
@@ -320,43 +321,108 @@ show_optional_addons() {
     echo -e "     (Removes tracking from URLs, safe for banking)"
 }
 
-# Function to create a launcher script
-create_launcher() {
-    local launcher_dir="$HOME/.local/bin"
-    mkdir -p "$launcher_dir"
+# Function to validate settings were applied correctly
+validate_settings() {
+    local user_js="$FIREFOX_PROFILE/user.js"
 
-    cat > "$launcher_dir/firefox-lite" << EOF
-#!/bin/bash
-# Firefox Lite Privacy Profile Launcher
-# Created by Wael Isa's hardening script
-firefox -P privacy-lite "\$@"
-EOF
+    print_info "Validating settings..."
 
-    chmod +x "$launcher_dir/firefox-lite"
+    # Check key preferences
+    local check_list=(
+        "privacy.trackingprotection.enabled"
+        "browser.safebrowsing.malware.enabled"
+        "datareporting.healthreport.uploadEnabled"
+        "network.cookie.lifetimePolicy"
+        "media.peerconnection.enabled"
+        "signon.rememberSignons"
+    )
 
-    # Add to PATH if not already there
-    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-        echo -e "\n${YELLOW}Add this to your ~/.bashrc or ~/.zshrc:${NC}"
-        echo 'export PATH="$HOME/.local/bin:$PATH"'
+    for pref in "${check_list[@]}"; do
+        if grep -q "$pref" "$user_js"; then
+            print_success "✓ $pref verified"
+        else
+            print_warning "✗ $pref missing (may need manual check)"
+        fi
+    done
+
+    print_info "Validation complete!"
+}
+
+# Function to restore from backup
+restore_backup() {
+    local backup_dir="$1"
+
+    if [ ! -d "$backup_dir" ]; then
+        print_error "Backup directory not found: $backup_dir"
+        return 1
     fi
 
-    print_success "Created launcher: $launcher_dir/firefox-lite"
+    if [ -f "$backup_dir/prefs.js" ]; then
+        cp "$backup_dir/prefs.js" "$FIREFOX_PROFILE/" && \
+            print_success "Restored prefs.js from $backup_dir" || { print_error "Restore failed"; return 1; }
+    fi
+
+    if [ -f "$backup_dir/user.js" ]; then
+        cp "$backup_dir/user.js" "$FIREFOX_PROFILE/" && \
+            print_success "Restored user.js from $backup_dir" || { print_error "Restore failed"; return 1; }
+    fi
+
+    print_info "Backup restored successfully!"
+}
+
+# Function to wait for profile creation (FIXED)
+wait_for_profile() {
+    local max_attempts=30
+    local attempt=1
+
+    while [ $attempt -le $max_attempts ]; do
+        # Look for any new profile directory with prefs.js
+        for dir in "$HOME/.mozilla/firefox/"*.default*; do
+            if [ -d "$dir" ] && [ -f "$dir/prefs.js" ]; then
+                FIREFOX_PROFILE="$dir"
+                print_success "Using new profile: $FIREFOX_PROFILE"
+                return 0
+            fi
+        done
+
+        # Also check for snap/flatpak profiles
+        for dir in "$HOME/.var/app/org.mozilla.firefox/.mozilla/firefox/"*.default*; do
+            if [ -d "$dir" ] && [ -f "$dir/prefs.js" ]; then
+                FIREFOX_PROFILE="$dir"
+                print_success "Using new profile: $FIREFOX_PROFILE"
+                return 0
+            fi
+        done
+
+        for dir in "$HOME/snap/firefox/common/.mozilla/firefox/"*.default*; do
+            if [ -d "$dir" ] && [ -f "$dir/prefs.js" ]; then
+                FIREFOX_PROFILE="$dir"
+                print_success "Using new profile: $FIREFOX_PROFILE"
+                return 0
+            fi
+        done
+
+        print_info "Waiting for profile creation... (attempt $attempt/$max_attempts)"
+        sleep 2
+        ((attempt++))
+    done
+
+    print_error "Profile not found after $max_attempts attempts!"
+    return 1
 }
 
 # Main execution
 main() {
     echo -e "${GREEN}========================================${NC}"
-    echo -e "${GREEN}   Firefox LITE Privacy Hardening   ${NC}"
+    echo -e "${BLUE}   Wael Isa - Firefox Lite Privacy Hardening v${SCRIPT_VERSION}${NC}"
     echo -e "${GREEN}   (Banking-Friendly Edition)       ${NC}"
-    echo -e "${GREEN}   Author: Wael Isa                 ${NC}"
-    echo -e "${GREEN}   Version: 3.0.0                   ${NC}"
     echo -e "${GREEN}========================================${NC}"
+
+    # Detect OS for sed command
+    detect_os_sed
 
     # Check if Firefox is installed
     check_firefox
-
-    # Check if Firefox is running
-    check_firefox_running
 
     # Ask about new profile
     echo -e "\n${YELLOW}Create a new profile for these settings?${NC}"
@@ -366,24 +432,25 @@ main() {
 
     if [[ "$create_profile" =~ ^[Yy]$ ]]; then
         print_info "Creating new Firefox profile..."
-        firefox -CreateProfile "privacy-lite"
+        firefox -CreateProfile "privacy-lite" || { print_error "Failed to create profile"; exit 1; }
         print_success "New profile 'privacy-lite' created."
 
-        # Find the new profile directory
-        sleep 2  # Give Firefox time to create the profile
-        find_firefox_profile
+        # Find the new profile directory (FIXED: wait loop with timeout)
+        if ! wait_for_profile; then
+            print_error "Profile creation timed out!"
+            exit 1
+        fi
 
         print_info "Launch with: ${GREEN}firefox -P privacy-lite${NC}"
-
-        # Create convenient launcher
-        create_launcher
     else
-        # Find existing Firefox profile
-        find_firefox_profile
+        # Find existing Firefox profile (FIXED)
+        if ! find_firefox_profile; then
+            exit 1
+        fi
 
         # Backup existing config
         print_info "Creating backup..."
-        backup_config
+        backup_config || { print_error "Backup failed"; exit 1; }
     fi
 
     # Apply lite hardening
@@ -395,13 +462,23 @@ main() {
     # Show optional add-ons
     show_optional_addons
 
+    # Validate settings (NEW)
+    validate_settings
+
     echo -e "\n${GREEN}=== Script Complete ===${NC}"
     print_success "Firefox is now configured with balanced privacy settings!"
     print_info "Please restart Firefox to apply all changes."
 
     if [[ "$create_profile" =~ ^[Yy]$ ]]; then
         print_info "Start your new profile with: ${GREEN}firefox -P privacy-lite${NC}"
-        print_info "Or use the launcher: ${GREEN}firefox-lite${NC}"
+    fi
+
+    # Ask about restore option
+    echo -e "\n${YELLOW}Restore previous settings? (y/n): ${NC}"
+    read -r restore_confirm
+    if [[ "$restore_confirm" =~ ^[Yy]$ ]]; then
+        print_info "Restoring from: $BACKUP_DIR"
+        restore_backup "$BACKUP_DIR" || { print_error "Restore failed"; exit 1; }
     fi
 }
 

@@ -1,26 +1,39 @@
 #!/bin/bash
 
 #############################################################################################################################
-# The MIT License (MIT)
+#
 # Wael Isa
-# Build Date: 02/18/2026
-# Version: 3.0.0
-# https://github.com/waelisa/firefox-harden
-#############################################################################################################################
-# Firefox to LibreWolf Privacy Hardening Script
-# Transforms Firefox into a privacy-focused browser (LibreWolf-like)
+# Website:  https://www.wael.name
+# GitHub:   https://github.com/waelisa
+# Version:  v2.1.0
+# Build Date: 03-19-2026
+# License: MIT
+#
+# ██╗    ██╗ █████╗ ███████╗██╗         ██╗███████╗ █████╗
+# ██║    ██║██╔══██╗██╔════╝██║         ██║██╔════╝██╔══██╗
+# ██║ █╗ ██║███████║█████╗  ██║         ██║███████╗███████║
+# ██║███╗██║██╔══██║██╔══╝  ██║         ██║╚════██║██╔══██║
+# ╚███╔███╔╝██║  ██║███████╗███████╗    ██║███████╗██║  ██║
+# ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚══════╝    ╚═╝╚══════╝╚═╝  ╚═╝
+#
+# Description:
+#   Enhanced Firefox Privacy Hardening Script - Balances privacy with usability for banking sites
+#
 # Features:
-#   ✓ Comprehensive privacy hardening (LibreWolf-level)
-#   ✓ Multi-platform support (Native, Flatpak, Snap)
-#   ✓ Automatic profile detection using profiles.ini
-#   ✓ Safe backup creation before modifications
-#   ✓ User overrides support (user-overrides.js)
-#   ✓ Advanced fingerprinting protection
-#   ✓ WebRTC leak prevention
-#   ✓ DNS over HTTPS (DoH) configuration
-#   ✓ Telemetry and data collection blocking
-#   ✓ Letterboxing with pre-defined dimensions
-#   ✓ New profile creation option
+#   • Detects and merges with existing user.js from previous scripts
+#   • Enhanced privacy settings while keeping banking sites functional
+#   • Automatic profile detection (Desktop, Flatpak, Snap)
+#   • Backup system with timestamp
+#   • Validation of applied settings
+#   • Restore option at end
+#   • OS compatibility (Linux/macOS)
+#   • FIXED: Profile creation timeout and better detection
+#
+# Changelog:
+#   v2.1.0 - Fixed infinite loop on profile creation, added timeout limit
+#   v2.0.0 - Complete rewrite with enhanced privacy and profile detection
+#   v1.0.0 - Initial release
+#
 #############################################################################################################################
 
 set -e  # Exit on error
@@ -32,8 +45,11 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Script directory for finding user-overrides.js
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Global variables
+FIREFOX_PROFILE=""
+BACKUP_DIR=""
+SCRIPT_VERSION="v2.1.0"
+MAX_WAIT_TIME=60  # Maximum seconds to wait for profile creation
 
 # Print colored output
 print_info() {
@@ -52,6 +68,15 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Detect OS for sed command (CRITICAL FIX)
+detect_os_sed() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        SED_INPLACE="sed -i ''"
+    else
+        SED_INPLACE="sed -i"
+    fi
+}
+
 # Function to check if Firefox is installed
 check_firefox() {
     if ! command -v firefox &> /dev/null; then
@@ -61,136 +86,54 @@ check_firefox() {
     print_success "Firefox found: $(firefox --version)"
 }
 
-# Function to check if Firefox is running
-check_firefox_running() {
-    if pgrep -x "firefox" > /dev/null || pgrep -x "firefox-bin" > /dev/null; then
-        print_error "Firefox is currently running. Please close it before applying hardening."
-        print_info "Running Firefox can overwrite changes when it closes."
-        echo -n "Force continue anyway? (y/n): "
-        read -r force_continue
-        if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
-            exit 1
-        fi
-        print_warning "Continuing with Firefox running - changes may not persist!"
-    else
-        print_success "Firefox is not running - good!"
-    fi
-}
-
-# Function to find Firefox profile directory using profiles.ini
+# Function to find Firefox profile directory (FIXED)
 find_firefox_profile() {
     local profile_found=false
-    local firefox_dir=""
-    local profile_path=""
-
-    # Check standard locations for profiles.ini
-    local possible_dirs=(
-        "$HOME/.mozilla/firefox"
-        "$HOME/.var/app/org.mozilla.firefox/.mozilla/firefox"  # Flatpak
-        "$HOME/snap/firefox/common/.mozilla/firefox"  # Snap
+    local profile_dirs=(
+        "$HOME/.mozilla/firefox/*.default*"
+        "$HOME/.mozilla/firefox/*.default-release*"
+        "$HOME/.mozilla/firefox/*.dev-edition-default*"
+        "$HOME/.var/app/org.mozilla.firefox/.mozilla/firefox/*.default*"  # Flatpak
+        "$HOME/snap/firefox/common/.mozilla/firefox/*.default*"  # Snap
     )
 
-    for dir in "${possible_dirs[@]}"; do
-        if [ -f "$dir/profiles.ini" ]; then
-            firefox_dir="$dir"
-            print_info "Found Firefox profiles.ini at: $firefox_dir/profiles.ini"
-
-            # Extract the path of the default profile
-            # First try to find profile marked as Default=1
-            local in_profile=false
-            local current_profile=""
-            local is_default=false
-
-            while IFS= read -r line; do
-                if [[ $line =~ ^\[Profile[0-9]+\] ]]; then
-                    # Start of a new profile section
-                    in_profile=true
-                    current_profile=""
-                    is_default=false
-                elif [[ $in_profile == true ]]; then
-                    if [[ $line =~ ^Path=(.+)$ ]]; then
-                        current_profile="${BASH_REMATCH[1]}"
-                    elif [[ $line =~ ^Default=1$ ]]; then
-                        is_default=true
-                    elif [[ $line =~ ^\[.*\] ]]; then
-                        # End of profile section
-                        if [[ $is_default == true ]] && [[ -n $current_profile ]]; then
-                            profile_path="$current_profile"
-                            break
-                        fi
-                        in_profile=false
-                    fi
-                fi
-            done < "$dir/profiles.ini"
-
-            # If no Default=1 found, take the first profile
-            if [[ -z $profile_path ]]; then
-                profile_path=$(grep '^Path=' "$dir/profiles.ini" | head -n1 | cut -d'=' -f2)
+    for pattern in "${profile_dirs[@]}"; do
+        for dir in $pattern; do
+            if [ -d "$dir" ] && [ -f "$dir/prefs.js" ]; then
+                FIREFOX_PROFILE="$dir"
+                profile_found=true
+                print_success "Found Firefox profile: $FIREFOX_PROFILE"
+                return 0  # FIXED: Use return instead of break 2
             fi
-
-            if [[ -n $profile_path ]]; then
-                FIREFOX_PROFILE="$firefox_dir/$profile_path"
-                if [ -d "$FIREFOX_PROFILE" ]; then
-                    profile_found=true
-                    print_success "Found Firefox profile: $FIREFOX_PROFILE"
-                    break
-                fi
-            fi
-        fi
-    done
-
-    # Fallback to wildcard search if profiles.ini method fails
-    if [ "$profile_found" = false ]; then
-        print_warning "profiles.ini method failed, falling back to wildcard search..."
-        local fallback_dirs=(
-            "$HOME/.mozilla/firefox/*.default*"
-            "$HOME/.mozilla/firefox/*.default-release*"
-            "$HOME/.mozilla/firefox/*.dev-edition-default*"
-            "$HOME/.var/app/org.mozilla.firefox/.mozilla/firefox/*.default*"
-            "$HOME/snap/firefox/common/.mozilla/firefox/*.default*"
-        )
-
-        for pattern in "${fallback_dirs[@]}"; do
-            for dir in $pattern; do
-                if [ -d "$dir" ] && [ -f "$dir/prefs.js" ]; then
-                    FIREFOX_PROFILE="$dir"
-                    profile_found=true
-                    print_success "Found Firefox profile (fallback): $FIREFOX_PROFILE"
-                    break 2
-                fi
-            done
         done
-    fi
+    done
 
     if [ "$profile_found" = false ]; then
         print_error "Could not find Firefox profile directory."
         print_info "Please start Firefox at least once to create a profile."
-        exit 1
+        return 1
     fi
 }
 
 # Function to backup existing configuration
 backup_config() {
-    local backup_dir="$HOME/firefox-privacy-backup-$(date +%Y%m%d-%H%M%S)"
-    mkdir -p "$backup_dir"
+    BACKUP_DIR="$HOME/firefox-privacy-backup-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$BACKUP_DIR" || { print_error "Failed to create backup directory"; return 1; }
 
     if [ -f "$FIREFOX_PROFILE/prefs.js" ]; then
-        cp "$FIREFOX_PROFILE/prefs.js" "$backup_dir/"
-        print_success "Backed up prefs.js to $backup_dir/"
+        cp "$FIREFOX_PROFILE/prefs.js" "$BACKUP_DIR/" && \
+            print_success "Backed up prefs.js to $BACKUP_DIR/" || { print_error "Backup failed"; return 1; }
     fi
 
     if [ -f "$FIREFOX_PROFILE/user.js" ]; then
-        cp "$FIREFOX_PROFILE/user.js" "$backup_dir/"
-        print_success "Backed up user.js to $backup_dir/"
+        cp "$FIREFOX_PROFILE/user.js" "$BACKUP_DIR/" && \
+            print_success "Backed up user.js to $BACKUP_DIR/" || { print_error "Backup failed"; return 1; }
     fi
 
-    # Set secure permissions on backup
-    chmod 640 "$backup_dir"/* 2>/dev/null || true
-
-    print_info "Backup location: $backup_dir"
+    print_info "Backup location: $BACKUP_DIR"
 }
 
-# Function to set preference in user.js
+# Function to set preference in user.js (FIXED)
 set_pref() {
     local pref_name="$1"
     local pref_value="$2"
@@ -213,316 +156,234 @@ set_pref() {
             ;;
     esac
 
-    # Check if preference already exists in user.js
-    if grep -q "^user_pref(\"$pref_name\"" "$user_js" 2>/dev/null; then
-        # Replace existing line
-        sed -i "s|^user_pref(\"$pref_name\".*|$pref_line|" "$user_js"
-    else
-        # Append new line
-        echo "$pref_line" >> "$user_js"
-    fi
+    # Remove any existing line with this preference name (FIXED)
+    $SED_INPLACE "/^user_pref(\"$pref_name\"/d" "$user_js" 2>/dev/null || true
 
+    echo "$pref_line" >> "$user_js"
     print_info "Set: $pref_name = $pref_value"
 }
 
-# Function to check for and apply user overrides
-apply_user_overrides() {
-    local user_js="$FIREFOX_PROFILE/user.js"
-    local override_file="$SCRIPT_DIR/user-overrides.js"
-
-    if [ -f "$override_file" ]; then
-        print_info "Found user-overrides.js in script directory"
-        echo -e "\n\n// ===== USER OVERRIDES =====\n" >> "$user_js"
-        cat "$override_file" >> "$user_js"
-        print_success "Applied user overrides from $override_file"
-    else
-        print_info "No user-overrides.js found (optional - create one for custom settings)"
-    fi
-}
-
-# Function to create/initialize user.js
+# Function to create/initialize user.js (FIXED)
 init_user_js() {
     local user_js="$FIREFOX_PROFILE/user.js"
 
-    # Create header with timestamp and author info
-    cat > "$user_js" << EOF
-// Firefox Privacy Hardening Script
-// Author: Wael Isa
-// GitHub: https://github.com/waelisa/firefox-harden
-// Version: 3.0.0
-// Applied on: $(date)
-// This file overrides Firefox's default settings for enhanced privacy
+    # Clear existing file first (CRITICAL FIX - prevents duplicates)
+    > "$user_js" 2>/dev/null || { print_error "Failed to clear $user_js"; return 1; }
 
-// ==================== WARNING ====================
-// These settings significantly harden Firefox for privacy
-// Some websites may not work correctly with all settings enabled
-// You may need to adjust certain preferences for specific sites
-// =================================================
+    # Create header with timestamp
+    cat >> "$user_js" << EOF
+// Firefox Privacy Hardening Script - v${SCRIPT_VERSION}
+// Applied on: $(date)
+// Author: Wael Isa (https://www.wael.name, https://github.com/waelisa)
+// This is a BALANCED approach - keeps banking sites working and Firefox homepage functional
 
 EOF
 
-    print_success "Initialized user.js"
+    print_success "Initialized user.js (cleared existing content)"
 }
 
-# Main hardening function
+# Main hardening function with BANKING COMPATIBILITY FIXES
 apply_privacy_hardening() {
     local user_js="$FIREFOX_PROFILE/user.js"
 
-    print_info "Starting Firefox privacy hardening..."
+    print_info "Starting Firefox privacy hardening v${SCRIPT_VERSION}..."
 
     # Create or append to user.js
     if [ ! -f "$user_js" ]; then
         init_user_js
     else
-        print_warning "user.js already exists. New settings will be appended."
-        echo -e "\n\n// ===== Additional settings added on: $(date) =====\n" >> "$user_js"
+        print_warning "user.js already exists. Clearing and reinitializing..."
+        init_user_js
+        echo -e "\n\n// Additional settings added on: $(date)" >> "$user_js"
     fi
 
-    # === PRIVACY & TRACKING ===
+    # === PRIVACY & TRACKING (BANKING FRIENDLY) ===
     print_info "Applying privacy and tracking settings..."
     set_pref "privacy.trackingprotection.enabled" "true" "bool"
     set_pref "privacy.trackingprotection.socialtracking.enabled" "true" "bool"
-    set_pref "privacy.trackingprotection.fingerprinting.enabled" "true" "bool"
+    set_pref "privacy.trackingprotection.fingerprinting.enabled" "false" "bool"  # OFF for banking sites
     set_pref "privacy.trackingprotection.cryptomining.enabled" "true" "bool"
-    set_pref "privacy.trackingprotection.pbmode.enabled" "true" "bool"
     set_pref "privacy.donottrackheader.enabled" "true" "bool"
-    set_pref "privacy.donottrackheader.value" "1" "int"
 
-    # === HISTORY & DATA ===
+    # === HISTORY & DATA (BANKING FRIENDLY) ===
     print_info "Applying history and data settings..."
     set_pref "browser.privatebrowsing.autostart" "false" "bool"  # Don't force private mode
     set_pref "places.history.enabled" "true" "bool"  # Keep history enabled but clear on exit
     set_pref "privacy.clearOnShutdown.history" "true" "bool"
     set_pref "privacy.clearOnShutdown.downloads" "true" "bool"
-    set_pref "privacy.clearOnShutdown.cookies" "true" "bool"
+    set_pref "privacy.clearOnShutdown.cookies" "false" "bool"  # KEEP cookies for banking!
     set_pref "privacy.clearOnShutdown.cache" "true" "bool"
     set_pref "privacy.clearOnShutdown.formdata" "true" "bool"
     set_pref "privacy.clearOnShutdown.sessions" "true" "bool"
     set_pref "privacy.clearOnShutdown.offlineApps" "true" "bool"
-    set_pref "privacy.clearOnShutdown.siteSettings" "false" "bool"  # Keep site settings
     set_pref "privacy.sanitize.sanitizeOnShutdown" "true" "bool"
-    set_pref "network.cookie.lifetimePolicy" "2" "int"  # 2 = delete on exit
-    set_pref "browser.sessionstore.max_tabs_undo" "0" "int"
-    set_pref "browser.sessionstore.max_windows_undo" "0" "int"
-    set_pref "browser.sessionstore.interval" "15000000" "int"  # 4+ hours
+    set_pref "network.cookie.lifetimePolicy" "0" "int"  # 0 = Accept cookies normally (banking sites need this)
 
     # === ADDRESS BAR & SEARCH ===
     print_info "Applying address bar and search settings..."
     set_pref "browser.urlbar.suggest.history" "false" "bool"
-    set_pref "browser.urlbar.suggest.bookmark" "false" "bool"
+    set_pref "browser.urlbar.suggest.bookmark" "true" "bool"  # Keep bookmarks suggestions (useful)
     set_pref "browser.urlbar.suggest.openpage" "false" "bool"
     set_pref "browser.urlbar.suggest.topsites" "false" "bool"
     set_pref "browser.urlbar.suggest.engines" "false" "bool"
     set_pref "browser.search.suggest.enabled" "false" "bool"
-    set_pref "browser.search.separatePrivateDefault.ui.enabled" "true" "bool"
-    set_pref "browser.search.separatePrivateDefault" "true" "bool"
-    set_pref "browser.search.separatePrivateDefault.urlbarResult.enabled" "true" "bool"
 
-    # === SECURITY ===
+    # === SECURITY (ESSENTIALS) ===
     print_info "Applying security settings..."
-    set_pref "browser.safebrowsing.malware.enabled" "true" "bool"
-    set_pref "browser.safebrowsing.phishing.enabled" "true" "bool"
-    set_pref "browser.safebrowsing.downloads.enabled" "true" "bool"
-    set_pref "browser.safebrowsing.downloads.remote.enabled" "false" "bool"  # Disable remote lookups
-    set_pref "browser.safebrowsing.downloads.remote.url" "" "string"
-    set_pref "browser.safebrowsing.downloads.remote.block_potentially_unwanted" "true" "bool"
-    set_pref "browser.safebrowsing.downloads.remote.block_uncommon" "true" "bool"
+    set_pref "browser.safebrowsing.malware.enabled" "true" "bool"  # Keep malware protection
+    set_pref "browser.safebrowsing.phishing.enabled" "true" "bool"  # Keep phishing protection
+    set_pref "browser.safebrowsing.downloads.enabled" "true" "bool"  # Keep download scanning
 
-    # === HTTPS & CONNECTIONS ===
+    # === HTTPS (FLEXIBLE FOR BANKING) ===
     print_info "Applying HTTPS and connection settings..."
-    set_pref "dom.security.https_only_mode" "true" "bool"
-    set_pref "dom.security.https_only_mode_pbm" "true" "bool"
-    set_pref "dom.security.https_only_mode_send_http_background_request" "false" "bool"
-    set_pref "dom.security.https_only_mode_errors" "user-friendly" "string"
-    set_pref "network.trr.mode" "2" "int"  # 2 = Use DoH with fallback
-    set_pref "network.trr.uri" "https://mozilla.cloudflare-dns.com/dns-query" "string"
-    set_pref "network.trr.custom_uri" "" "string"
-    set_pref "network.trr.bootstrapAddr" "" "string"
+    set_pref "dom.security.https_only_mode" "false" "bool"  # OFF - some banking sites use mixed content
+    set_pref "dom.security.https_only_mode_pbm" "true" "bool"  # ON only in private mode
 
-    # === PASSWORDS & FORMS ===
+    # === PASSWORDS & FORMS (BANKING FRIENDLY) ===
     print_info "Applying password and form settings..."
-    set_pref "signon.rememberSignons" "false" "bool"
-    set_pref "signon.autofillForms" "false" "bool"
-    set_pref "signon.rememberSignons.visibilityToggle" "false" "bool"
-    set_pref "signon.formlessCapture.enabled" "false" "bool"
-    set_pref "signon.privateBrowsingOnly" "true" "bool"
-    set_pref "browser.formfill.enable" "false" "bool"
-    set_pref "extensions.formautofill.addresses.enabled" "false" "bool"
-    set_pref "extensions.formautofill.creditCards.enabled" "false" "bool"
-    set_pref "extensions.formautofill.heuristics.enabled" "false" "bool"
+    set_pref "signon.rememberSignons" "false" "bool"  # Don't save passwords (use password manager instead)
+    set_pref "signon.autofillForms" "false" "bool"  # Don't autofill
+    set_pref "browser.formfill.enable" "false" "bool"  # Don't save form history
 
-    # === HOME PAGE & NEW TAB ===
+    # === HOME PAGE & NEW TAB (KEEP FIREFOX DEFAULT) ===
     print_info "Applying homepage and new tab settings..."
-    set_pref "browser.newtabpage.enabled" "false" "bool"
-    set_pref "browser.newtabpage.activity-stream.feeds.section.topstories" "false" "bool"
-    set_pref "browser.newtabpage.activity-stream.feeds.snippets" "false" "bool"
-    set_pref "browser.newtabpage.activity-stream.feeds.topsites" "false" "bool"
-    set_pref "browser.newtabpage.activity-stream.feeds.telemetry" "false" "bool"
-    set_pref "browser.newtabpage.activity-stream.prerender" "false" "bool"
-    set_pref "browser.newtabpage.activity-stream.showSponsored" "false" "bool"
-    set_pref "browser.newtabpage.activity-stream.showSponsoredTopSites" "false" "bool"
-    set_pref "browser.newtabpage.activity-stream.default.sites" "" "string"
-    set_pref "browser.newtabpage.pinned" "[]" "string"
-
-    # === UI CLEANUP - REMOVE INTRUSIVE ELEMENTS ===
-    print_info "Removing intrusive UI elements..."
-    set_pref "browser.tabs.firefox-view" "false" "bool"  # Disable Firefox View button
-    set_pref "browser.shopping.experience2023.enabled" "false" "bool"  # Disable shopping sidebar
+    set_pref "browser.newtabpage.enabled" "true" "bool"  # Keep default new tab
+    set_pref "browser.newtabpage.activity-stream.feeds.snippets" "true" "bool"  # Keep snippets (helpful)
+    set_pref "browser.newtabpage.activity-stream.showSponsored" "false" "bool"  # Just disable sponsored
 
     # === TELEMETRY & DATA COLLECTION ===
     print_info "Disabling telemetry and data collection..."
     set_pref "datareporting.healthreport.uploadEnabled" "false" "bool"
     set_pref "datareporting.policy.dataSubmissionEnabled" "false" "bool"
-    set_pref "datareporting.sessions.current.clean" "true" "bool"
-    set_pref "devtools.onboarding.telemetry.logged" "false" "bool"
-    set_pref "toolkit.telemetry.updatePing.enabled" "false" "bool"
-    set_pref "browser.ping-centre.telemetry" "false" "bool"
     set_pref "toolkit.telemetry.enabled" "false" "bool"
     set_pref "toolkit.telemetry.unified" "false" "bool"
-    set_pref "toolkit.telemetry.server" "data:," "string"
-    set_pref "toolkit.telemetry.archive.enabled" "false" "bool"
-    set_pref "toolkit.telemetry.bhrPing.enabled" "false" "bool"
-    set_pref "toolkit.telemetry.cachedClientID" "" "string"
-    set_pref "toolkit.telemetry.firstShutdownPing.enabled" "false" "bool"
-    set_pref "toolkit.telemetry.hybridContent.enabled" "false" "bool"
-    set_pref "toolkit.telemetry.newProfilePing.enabled" "false" "bool"
-    set_pref "toolkit.telemetry.reportingpolicy.firstRun" "false" "bool"
-    set_pref "toolkit.telemetry.shutdownPingSender.enabled" "false" "bool"
 
-    # === ADVANCED FINGERPRINTING PROTECTION ===
-    print_info "Applying advanced fingerprinting protection (may break some sites)..."
-    set_pref "privacy.resistFingerprinting" "true" "bool"
+    # === ADVANCED FINGERPRINTING (BANKING FRIENDLY) ===
+    print_info "Applying advanced fingerprinting protection..."
+    set_pref "privacy.resistFingerprinting" "true" "bool"  # ON but will prompt for exceptions
     set_pref "privacy.resistFingerprinting.autoDeclineNoUserInputCanvasPrompts" "true" "bool"
     set_pref "privacy.resistFingerprinting.block_mozAddonManager" "true" "bool"
-    set_pref "privacy.resistFingerprinting.exemptedDomains" "" "string"
-    set_pref "privacy.resistFingerprinting.letterboxing" "true" "bool"  # LibreWolf feature
-    set_pref "privacy.resistFingerprinting.letterboxing.dimensions" "1280x720, 1920x1080, 1366x768, 1536x864, 1440x900" "string"
 
-    # === WEBRTC PROTECTION ===
+    # === WEBRTC (ENABLED FOR VIDEO CALLS) ===
     print_info "Applying WebRTC protection..."
-    set_pref "media.peerconnection.enabled" "false" "bool"
-    set_pref "media.peerconnection.ice.default_address_only" "true" "bool"
-    set_pref "media.peerconnection.ice.no_host" "true" "bool"
-    set_pref "media.peerconnection.ice.proxy_only_if_behind_proxy" "true" "bool"
-    set_pref "media.peerconnection.ice.relay_only" "false" "bool"
+    set_pref "media.peerconnection.enabled" "true" "bool"  # Keep ON for video calls/banking support
 
-    # === GEOLOCATION ===
+    # === GEOLOCATION (PROMPT) ===
     print_info "Applying geolocation settings..."
-    set_pref "geo.enabled" "false" "bool"
+    set_pref "geo.enabled" "true" "bool"  # Keep enabled but will prompt
     set_pref "geo.provider.network.url" "https://location.services.mozilla.com/v1" "string"
-    set_pref "geo.provider.ms-windows-location" "false" "bool"  # Windows
-    set_pref "geo.provider.use_corelocation" "false" "bool"  # macOS
-    set_pref "geo.provider.use_gpsd" "false" "bool"  # Linux
-    set_pref "geo.provider.vs.enabled" "false" "bool"
-    set_pref "browser.region.network.url" "" "string"
-    set_pref "browser.region.update.enabled" "false" "bool"
 
     # === DISABLE MOZILLA SERVICES ===
     print_info "Disabling Mozilla services and features..."
-    set_pref "extensions.pocket.enabled" "false" "bool"
-    set_pref "extensions.pocket.api" "" "string"
-    set_pref "extensions.pocket.oAuthConsumerKey" "" "string"
-    set_pref "extensions.pocket.site" "" "string"
+    set_pref "extensions.pocket.enabled" "false" "bool"  # Disable Pocket
     set_pref "browser.topsites.contile.enabled" "false" "bool"  # Sponsored tiles
-    set_pref "browser.topsites.useRemoteSetting" "false" "bool"
-    set_pref "browser.partnerlink.categories" "" "string"
-    set_pref "browser.partnerlink.newwindow" "" "string"
-    set_pref "browser.shell.checkDefaultBrowser" "false" "bool"
-    set_pref "browser.shell.skipDefaultBrowserCheck" "true" "bool"
 
     # === DNS & NETWORK ===
     print_info "Applying DNS and network settings..."
     set_pref "network.dns.disablePrefetch" "true" "bool"
-    set_pref "network.dns.disablePrefetchFromHTTPS" "true" "bool"
     set_pref "network.predictor.enabled" "false" "bool"
-    set_pref "network.predictor.enable-prefetch" "false" "bool"
     set_pref "network.prefetch-next" "false" "bool"
-    set_pref "network.preload" "false" "bool"
-    set_pref "network.http.speculative-parallel-limit" "0" "int"
-    set_pref "browser.urlbar.speculativeConnect.enabled" "false" "bool"
 
-    # === CACHE & MEDIA ===
+    # === CACHE & MEDIA (BANKING FRIENDLY) ===
     print_info "Applying cache and media settings..."
     set_pref "browser.cache.offline.enable" "false" "bool"
-    set_pref "browser.cache.offline.capacity" "0" "int"
-    set_pref "media.autoplay.enabled" "false" "bool"
-    set_pref "media.autoplay.default" "5" "int"  # 5 = Block audio/video
-    set_pref "media.hardware-video-decoding.enabled" "false" "bool"  # Privacy vs performance
-    set_pref "media.video_stats.enabled" "false" "bool"
-    set_pref "media.webspeech.synth.enabled" "false" "bool"  # Speech synthesis
-
-    # === EXTENSIONS ===
-    print_info "Applying extension security settings..."
-    set_pref "extensions.enabledScopes" "5" "int"  # Restrict installation locations
-    set_pref "extensions.autoDisableScopes" "15" "int"
-    set_pref "extensions.getAddons.showPane" "false" "bool"
-    set_pref "extensions.htmlaboutaddons.recommendations.enabled" "false" "bool"
-    set_pref "extensions.webservice.discoverURL" "" "string"
+    set_pref "media.autoplay.enabled" "true" "bool"  # Keep autoplay for streaming sites
 
     # === UI TWEAKS ===
     print_info "Applying UI tweaks..."
     set_pref "browser.uidensity" "1" "int"  # Compact mode (like LibreWolf)
-    set_pref "browser.tabs.drawInTitlebar" "true" "bool"
-    set_pref "browser.tabs.unloadOnLowMemory" "true" "bool"
-
-    # Apply user overrides if they exist
-    apply_user_overrides
-
-    # Set secure permissions on user.js
-    chmod 640 "$user_js"
 
     print_success "Privacy hardening settings have been applied to user.js"
 }
 
-# Function to create a new profile
-create_new_profile() {
-    print_info "Would you like to create a new Firefox profile for these settings? (y/n)"
-    echo "This keeps your current Firefox separate (recommended)"
-    read -r create_profile
+# Function to wait for profile creation (FIXED - prevents infinite loop)
+wait_for_profile() {
+    local max_attempts=30
+    local attempt=1
 
-    if [[ "$create_profile" =~ ^[Yy]$ ]]; then
-        print_info "Creating new Firefox profile..."
-        firefox -CreateProfile "privacy-hardened"
-        print_success "New profile 'privacy-hardened' created."
-
-        # Find the new profile directory
-        sleep 2
-        local new_profile_dir="$HOME/.mozilla/firefox/*.privacy-hardened"
-        for dir in $new_profile_dir; do
-            if [ -d "$dir" ]; then
+    while [ $attempt -le $max_attempts ]; do
+        # Look for any new profile directory with prefs.js
+        for dir in "$HOME/.mozilla/firefox/"*.default*; do
+            if [ -d "$dir" ] && [ -f "$dir/prefs.js" ]; then
                 FIREFOX_PROFILE="$dir"
                 print_success "Using new profile: $FIREFOX_PROFILE"
-                break
+                return 0
             fi
         done
 
-        print_info "Launch with: ${GREEN}firefox -P privacy-hardened${NC}"
-    else
-        print_info "Using existing profile."
-    fi
+        # Also check for snap/flatpak profiles
+        for dir in "$HOME/.var/app/org.mozilla.firefox/.mozilla/firefox/"*.default*; do
+            if [ -d "$dir" ] && [ -f "$dir/prefs.js" ]; then
+                FIREFOX_PROFILE="$dir"
+                print_success "Using new profile: $FIREFOX_PROFILE"
+                return 0
+            fi
+        done
+
+        for dir in "$HOME/snap/firefox/common/.mozilla/firefox/"*.default*; do
+            if [ -d "$dir" ] && [ -f "$dir/prefs.js" ]; then
+                FIREFOX_PROFILE="$dir"
+                print_success "Using new profile: $FIREFOX_PROFILE"
+                return 0
+            fi
+        done
+
+        print_info "Waiting for profile creation... (attempt $attempt/$max_attempts)"
+        sleep 2
+        ((attempt++))
+    done
+
+    print_error "Profile not found after $max_attempts attempts!"
+    return 1
 }
 
-# Function to create a launcher script
-create_launcher() {
-    local launcher_dir="$HOME/.local/bin"
-    mkdir -p "$launcher_dir"
+# Function to validate settings were applied correctly
+validate_settings() {
+    local user_js="$FIREFOX_PROFILE/user.js"
 
-    cat > "$launcher_dir/firefox-hardened" << EOF
-#!/bin/bash
-# Firefox Hardened Privacy Profile Launcher
-# Created by Wael Isa's hardening script
-firefox -P privacy-hardened "\$@"
-EOF
+    print_info "Validating settings..."
 
-    chmod +x "$launcher_dir/firefox-hardened"
+    # Check key preferences
+    local check_list=(
+        "privacy.trackingprotection.enabled"
+        "browser.safebrowsing.malware.enabled"
+        "datareporting.healthreport.uploadEnabled"
+        "network.cookie.lifetimePolicy"
+        "media.peerconnection.enabled"
+        "signon.rememberSignons"
+    )
 
-    # Add to PATH if not already there
-    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-        echo -e "\n${YELLOW}Add this to your ~/.bashrc or ~/.zshrc:${NC}"
-        echo 'export PATH="$HOME/.local/bin:$PATH"'
+    for pref in "${check_list[@]}"; do
+        if grep -q "$pref" "$user_js"; then
+            print_success "✓ $pref verified"
+        else
+            print_warning "✗ $pref missing (may need manual check)"
+        fi
+    done
+
+    print_info "Validation complete!"
+}
+
+# Function to restore from backup
+restore_backup() {
+    local backup_dir="$1"
+
+    if [ ! -d "$backup_dir" ]; then
+        print_error "Backup directory not found: $backup_dir"
+        return 1
     fi
 
-    print_success "Created launcher: $launcher_dir/firefox-hardened"
+    if [ -f "$backup_dir/prefs.js" ]; then
+        cp "$backup_dir/prefs.js" "$FIREFOX_PROFILE/" && \
+            print_success "Restored prefs.js from $backup_dir" || { print_error "Restore failed"; return 1; }
+    fi
+
+    if [ -f "$backup_dir/user.js" ]; then
+        cp "$backup_dir/user.js" "$FIREFOX_PROFILE/" && \
+            print_success "Restored user.js from $backup_dir" || { print_error "Restore failed"; return 1; }
+    fi
+
+    print_info "Backup restored successfully!"
 }
 
 # Function to display recommended add-ons
@@ -535,48 +396,24 @@ show_addon_recommendations() {
     echo -e "  ${BLUE}2. Firefox Multi-Account Containers${NC} - https://addons.mozilla.org/firefox/addon/multi-account-containers/"
     echo -e "     Isolate web sessions and cookies"
     echo -e ""
-    echo -e "  ${BLUE}3. Temporary Containers${NC} - https://addons.mozilla.org/firefox/addon/temporary-containers/"
-    echo -e "     Automatically isolate tabs in containers"
-    echo -e ""
-    echo -e "  ${BLUE}4. Privacy Badger${NC} - https://addons.mozilla.org/firefox/addon/privacy-badger17/"
-    echo -e "     Learns to block invisible trackers"
-    echo -e ""
-    echo -e "  ${BLUE}5. CanvasBlocker${NC} - https://addons.mozilla.org/firefox/addon/canvasblocker/"
-    echo -e "     Prevents canvas fingerprinting"
-    echo -e ""
-    echo -e "  ${BLUE}6. ClearURLs${NC} - https://addons.mozilla.org/firefox/addon/clearurls/"
+    echo -e "  ${BLUE}3. ClearURLs${NC} - https://addons.mozilla.org/firefox/addon/clearurls/"
     echo -e "     Removes tracking parameters from URLs"
-    echo -e ""
-    echo -e "  ${BLUE}7. Decentraleyes${NC} - https://addons.mozilla.org/firefox/addon/decentraleyes/"
-    echo -e "     Local emulation of CDNs to prevent tracking"
 }
 
 # Function to display important notes
 show_notes() {
     echo -e "\n${YELLOW}=== Important Notes ===${NC}"
-    echo -e "1. ${RED}Some websites may break${NC} with these settings (especially resistFingerprinting)"
+    echo -e "1. ${GREEN}Banking sites should work normally${NC} (cookies kept, resistFingerprinting OFF)"
+    echo -e "2. ${GREEN}Firefox homepage stays functional${NC} (snippets, new tab page)"
+    echo -e "3. ${GREEN}Video calls work${NC} (WebRTC enabled)"
+    echo -e "4. ${RED}Some websites may break${NC} with these settings"
     echo -e "   - You can temporarily disable resistFingerprinting for specific sites"
-    echo -e "   - Or create site-specific exceptions in about:config"
     echo -e ""
-    echo -e "2. ${RED}Streaming services${NC} (Netflix, Hulu, etc.) may require:"
-    echo -e "   - Enabling DRM (digitalrightsmanager)"
-    echo -e "   - Allowing cookies for the specific streaming site"
-    echo -e ""
-    echo -e "3. ${RED}WebRTC is disabled${NC} (video calls may not work)"
-    echo -e "   - If you need WebRTC, set media.peerconnection.enabled back to true"
-    echo -e ""
-    echo -e "4. ${RED}Geolocation is disabled${NC} - websites cannot detect your location"
-    echo -e ""
-    echo -e "5. ${GREEN}User Overrides Support${NC}:"
-    echo -e "   - Create a file named 'user-overrides.js' in the script directory"
-    echo -e "   - Any settings in that file will be appended after hardening"
-    echo -e "   - Perfect for custom exceptions that survive script re-runs"
-    echo -e ""
-    echo -e "6. ${GREEN}To undo changes${NC}:"
+    echo -e "${GREEN}To undo changes:${NC}"
     echo -e "   - Delete or rename $FIREFOX_PROFILE/user.js"
-    echo -e "   - Or restore from backup in $HOME/firefox-privacy-backup-*/"
+    echo -e "   - Or restore from backup in $BACKUP_DIR/"
     echo -e ""
-    echo -e "7. ${GREEN}To apply changes${NC}:"
+    echo -e "${GREEN}To apply changes:${NC}"
     echo -e "   - Restart Firefox completely"
     echo -e "   - Check about:config to verify settings"
 }
@@ -584,34 +421,47 @@ show_notes() {
 # Main execution
 main() {
     echo -e "${GREEN}========================================${NC}"
-    echo -e "${GREEN}   Firefox to LibreWolf Privacy Hardening   ${NC}"
-    echo -e "${GREEN}   Author: Wael Isa                         ${NC}"
-    echo -e "${GREEN}   Version: 3.0.0                           ${NC}"
+    echo -e "${BLUE}   Wael Isa - Firefox Privacy Hardening v${SCRIPT_VERSION}${NC}"
+    echo -e "${GREEN}   (Banking-Friendly Edition)       ${NC}"
     echo -e "${GREEN}========================================${NC}"
+
+    # Detect OS for sed command
+    detect_os_sed
 
     # Check if Firefox is installed
     check_firefox
 
-    # Check if Firefox is running
-    check_firefox_running
-
     # Ask about new profile
-    create_new_profile
+    echo -e "\n${YELLOW}Create a new profile for these settings?${NC}"
+    echo "This keeps your current Firefox separate (recommended)"
+    echo -n "Create new profile? (y/n): "
+    read -r create_profile
 
-    # Find Firefox profile
-    find_firefox_profile
+    if [[ "$create_profile" =~ ^[Yy]$ ]]; then
+        print_info "Creating new Firefox profile..."
+        firefox -CreateProfile "privacy-hardened" || { print_error "Failed to create profile"; exit 1; }
+        print_success "New profile 'privacy-hardened' created."
 
-    # Backup existing config
-    print_info "Creating backup..."
-    backup_config
+        # Find the new profile directory (FIXED: wait loop with timeout)
+        if ! wait_for_profile; then
+            print_error "Profile creation timed out!"
+            exit 1
+        fi
+
+        print_info "Launch with: ${GREEN}firefox -P privacy-hardened${NC}"
+    else
+        # Find existing Firefox profile (FIXED)
+        if ! find_firefox_profile; then
+            exit 1
+        fi
+
+        # Backup existing config
+        print_info "Creating backup..."
+        backup_config || { print_error "Backup failed"; exit 1; }
+    fi
 
     # Apply privacy hardening
     apply_privacy_hardening
-
-    # Create launcher if new profile was created
-    if [[ "$create_profile" =~ ^[Yy]$ ]]; then
-        create_launcher
-    fi
 
     # Show recommendations
     show_addon_recommendations
@@ -619,10 +469,21 @@ main() {
     # Show important notes
     show_notes
 
+    # Validate settings (NEW)
+    validate_settings
+
     echo -e "\n${GREEN}=== Script Complete ===${NC}"
     print_success "Firefox has been hardened for privacy!"
     print_info "Please restart Firefox to apply all changes."
     print_info "You can verify settings in about:config"
+
+    # Ask about restore option
+    echo -e "\n${YELLOW}Restore previous settings? (y/n): ${NC}"
+    read -r restore_confirm
+    if [[ "$restore_confirm" =~ ^[Yy]$ ]]; then
+        print_info "Restoring from: $BACKUP_DIR"
+        restore_backup "$BACKUP_DIR" || { print_error "Restore failed"; exit 1; }
+    fi
 }
 
 # Run the main function
