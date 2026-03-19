@@ -1,4 +1,4 @@
-🦊 Firefox Privacy Hardening Scripts  
+# 🦊 Firefox Privacy Hardening Scripts  
 
 📖 Overview
 
